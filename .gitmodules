@@ -1,0 +1,9 @@
+[submodule "thirdparty/entt"]
+	path = thirdparty/entt
+	url = https://github.com/skypjack/entt.git
+[submodule "thirdparty/raylib"]
+	path = thirdparty/raylib
+	url = https://github.com/raysan5/raylib.git
+[submodule "thirdparty/magic_enum"]
+	path = thirdparty/magic_enum
+	url = https://github.com/Neargye/magic_enum.git
