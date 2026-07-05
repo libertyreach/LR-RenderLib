@@ -73,8 +73,10 @@ static void applyOrthographicControls(OrthographicCamera& cam)
 
             // World point under the cursor before the zoom.
             float wppBefore = cam.width / screenH;
-            float worldX = cam.target[0] + (mouse.x - screenW * 0.5f) * wppBefore;
-            float worldY = cam.target[1] - (mouse.y - screenH * 0.5f) * wppBefore;
+            float worldX =
+                cam.target[0] + (mouse.x - screenW * 0.5f) * wppBefore;
+            float worldY =
+                cam.target[1] - (mouse.y - screenH * 0.5f) * wppBefore;
 
             // Proportional zoom; scrolling up (positive wheel) zooms in.
             cam.width *= (1.0f - wheel * 0.1f * zoom->speed);
@@ -190,10 +192,9 @@ void RaylibGraphicsBackend::render(Entities* entities)
             [&](Sphere const& sphere) {
                 if (sphere.color[3] < 255)
                 {
-                    commands.emplace_back(
-                        sphere.entity, [sphere, drawSphere] {
-                            drawSphere(sphere);
-                        });
+                    commands.emplace_back(sphere.entity, [sphere, drawSphere] {
+                        drawSphere(sphere);
+                    });
                 }
                 else { drawSphere(sphere); }
             });
@@ -242,9 +243,9 @@ void RaylibGraphicsBackend::render(Entities* entities)
                     (int)text.position[1], text.fontSize, toColor(text.color));
             });
     }
-
-    EndDrawing();
 }
+
+void RaylibGraphicsBackend::endFrame() { EndDrawing(); }
 
 void RaylibGraphicsBackend::open(vec2i size, string title)
 {

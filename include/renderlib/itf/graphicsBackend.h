@@ -17,6 +17,7 @@ struct GraphicsBackend
     virtual void close() = 0;
     virtual bool shouldClose() = 0;
     virtual void clear() = 0;
+    virtual void endFrame() = 0;
     virtual void render(Entities* entities) = 0;
     virtual real dt() = 0;
 };

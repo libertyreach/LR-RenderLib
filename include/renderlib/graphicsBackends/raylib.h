@@ -10,6 +10,7 @@ public:
     void close() override;
     bool shouldClose() override;
     void clear() override;
+    void endFrame() override;
     void render(Entities* entities) override;
     real dt() override;
 };

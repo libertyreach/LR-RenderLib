@@ -54,6 +54,7 @@ void Runtime::run()
             m_graphics->clear();
             m_graphics->render(&m_entities);
             m_graphics->customRenderer(m_graphics.get(), &m_entities);
+            m_graphics->endFrame();
         }
     }
     m_graphics->close();
