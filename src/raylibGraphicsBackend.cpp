@@ -1,7 +1,7 @@
 #include <iostream>
 #include <raylib.h>
 #include "rlgl.h"
-#include "raymath.h"
+
 
 #include <renderlib/graphicsBackends/raylib.h>
 #include <renderlib/camera.h>
@@ -10,31 +10,6 @@
 #include <renderlib/entities.h>
 
 using namespace renderlib;
-
-Color toColor(vec4i vec)
-{
-    return Color{
-        (unsigned char)vec[0], (unsigned char)vec[1], (unsigned char)vec[2],
-        (unsigned char)vec[3]};
-}
-
-template <typename T>
-auto toVector(T vec)
-{
-    if constexpr (std::is_same_v<T, vec2i> || std::is_same_v<T, vec2>)
-    {
-        return Vector2{vec[0], vec[1]};
-    }
-    else if constexpr (std::is_same_v<T, vec3i> || std::is_same_v<T, vec3>)
-    {
-        return Vector3{vec[0], vec[1], vec[2]};
-    }
-    else if constexpr (std::is_same_v<T, vec4i> || std::is_same_v<T, vec4>)
-    {
-        return Vector4{vec[0], vec[1], vec[2], vec[3]};
-    }
-    else { throw std::runtime_error("Invalid vector conversion"); }
-}
 
 void RaylibGraphicsBackend::clear()
 {
@@ -114,6 +89,72 @@ static void applyOrthographicControls(OrthographicCamera& cam)
     }
 }
 
+void RaylibGraphicsBackend::drawBox(Box const& box)
+{
+    rlPushMatrix();
+    rlMultMatrixf(box.entity->worldMatrix.m.data());
+    DrawCubeV(
+        Vector3{0.0f, 0.0f, 0.0f}, toVector(box.size), toColor(box.color));
+    rlPopMatrix();
+}
+
+void RaylibGraphicsBackend::drawSphere(Sphere const& sphere)
+{
+    DrawSphere(
+        toVector(sphere.entity->worldPosition()), sphere.radius,
+        toColor(sphere.color));
+}
+
+void RaylibGraphicsBackend::drawCircle(Circle const& circle)
+{
+    rlPushMatrix();
+    rlMultMatrixf(circle.entity->worldMatrix.m.data());
+
+    Color color = toColor(circle.color);
+    const int segments = 64;
+    const float step = 2.0f * PI / segments;
+    const float r = circle.radius;
+
+    rlBegin(RL_TRIANGLES);
+    rlColor4ub(color.r, color.g, color.b, color.a);
+    if (circle.filled)
+    {
+        for (int i = 0; i < segments; i++)
+        {
+            float a0 = i * step;
+            float a1 = (i + 1) * step;
+            rlVertex3f(0.0f, 0.0f, 0.0f);
+            rlVertex3f(cosf(a0) * r, sinf(a0) * r, 0.0f);
+            rlVertex3f(cosf(a1) * r, sinf(a1) * r, 0.0f);
+        }
+    }
+    else
+    {
+        float inner = r - circle.thickness;
+        if (inner < 0.0f) inner = 0.0f;
+        for (int i = 0; i < segments; i++)
+        {
+            float a0 = i * step;
+            float a1 = (i + 1) * step;
+            float c0 = cosf(a0), s0 = sinf(a0);
+            float c1 = cosf(a1), s1 = sinf(a1);
+
+            // Two triangles forming the quad between inner and outer
+            // radius for this segment.
+            rlVertex3f(c0 * inner, s0 * inner, 0.0f);
+            rlVertex3f(c0 * r, s0 * r, 0.0f);
+            rlVertex3f(c1 * r, s1 * r, 0.0f);
+
+            rlVertex3f(c0 * inner, s0 * inner, 0.0f);
+            rlVertex3f(c1 * r, s1 * r, 0.0f);
+            rlVertex3f(c1 * inner, s1 * inner, 0.0f);
+        }
+    }
+    rlEnd();
+
+    rlPopMatrix();
+}
+
 void RaylibGraphicsBackend::render(Entities* entities)
 {
     bool foundCamera = false;
@@ -161,42 +202,32 @@ void RaylibGraphicsBackend::render(Entities* entities)
     {
         BeginMode3D(camera);
 
-        // Draw a box under its world transform: push the composed matrix and
-        // draw the cube at the local origin so rotation/parenting are honored.
-        auto drawBox = [](Box const& box) {
-            rlPushMatrix();
-            rlMultMatrixf(box.entity->worldMatrix.m.data());
-            DrawCubeV(
-                Vector3{0.0f, 0.0f, 0.0f}, toVector(box.size),
-                toColor(box.color));
-            rlPopMatrix();
-        };
-
         entities->registry()->view<const Box>().each([&](Box const& box) {
             if (box.color[3] < 255)
             {
-                commands.emplace_back(
-                    box.entity, [box, drawBox] { drawBox(box); });
+                commands.emplace_back(box.entity, [&, box] { drawBox(box); });
             }
             else { drawBox(box); }
         });
-
-        // A sphere is rotation-invariant, so its world position is enough.
-        auto drawSphere = [](Sphere const& sphere) {
-            DrawSphere(
-                toVector(sphere.entity->worldPosition()), sphere.radius,
-                toColor(sphere.color));
-        };
 
         entities->registry()->view<const Sphere>().each(
             [&](Sphere const& sphere) {
                 if (sphere.color[3] < 255)
                 {
-                    commands.emplace_back(sphere.entity, [sphere, drawSphere] {
-                        drawSphere(sphere);
-                    });
+                    commands.emplace_back(
+                        sphere.entity, [&, sphere] { drawSphere(sphere); });
                 }
                 else { drawSphere(sphere); }
+            });
+
+        entities->registry()->view<const Circle>().each(
+            [&](Circle const& circle) {
+                if (circle.color[3] < 255)
+                {
+                    commands.emplace_back(
+                        circle.entity, [&, circle] { drawCircle(circle); });
+                }
+                else { drawCircle(circle); }
             });
 
         std::sort(

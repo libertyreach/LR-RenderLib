@@ -14,7 +14,7 @@ class Runtime
 {
 public:
     Runtime(
-        std::unique_ptr<itf::GraphicsBackend> graphics, vec2i size,
+        std::shared_ptr<itf::GraphicsBackend> graphics, vec2i size,
         string title);
     ~Runtime();
 
@@ -59,7 +59,7 @@ public:
 private:
     vec2i m_size;
     string m_title;
-    std::unique_ptr<itf::GraphicsBackend> m_graphics;
+    std::shared_ptr<itf::GraphicsBackend> m_graphics;
     std::atomic<bool> m_running{false};
     std::mutex m_mutex;
     std::thread m_thread;

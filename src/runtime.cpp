@@ -3,7 +3,7 @@
 using namespace renderlib;
 
 Runtime::Runtime(
-    std::unique_ptr<itf::GraphicsBackend> graphics, vec2i size, string title)
+    std::shared_ptr<itf::GraphicsBackend> graphics, vec2i size, string title)
     : m_size(size), m_title(title), m_graphics(std::move(graphics))
 {
     m_running.store(true);
