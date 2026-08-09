@@ -11,7 +11,7 @@ struct GraphicsBackend
     std::function<void(GraphicsBackend*, Entities* entities)> customRenderer =
         [](auto gfx, auto entt) {};
 
-    vec4i clearColor = {0, 0, 0, 255};
+    vec4i clearColor = vec4i{{0, 0, 0, 255}};
 
     virtual void open(vec2i size, string title) = 0;
     virtual void close() = 0;

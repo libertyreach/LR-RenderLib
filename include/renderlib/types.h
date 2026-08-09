@@ -7,6 +7,7 @@
 #include <string_view>
 #include <optional>
 #include <array>
+#include "math.h"
 
 
 namespace renderlib {
@@ -32,11 +33,12 @@ using interval = std::tuple<T, T>;
 
 using real = float;
 
-using vec4i = std::array<int, 4>;
-using vec3i = std::array<int, 3>;
-using vec2i = std::array<int, 2>;
-using vec4 = std::array<real, 4>;
-using vec3 = std::array<real, 3>;
-using vec2 = std::array<real, 2>;
+using vec4i = Vector<int, 4>;
+using vec3i = Vector<int, 3>;
+using vec2i = Vector<int, 2>;
+using vec4 = Vector<real, 4>;
+using vec3 = Vector<real, 3>;
+using vec2 = Vector<real, 2>;
+using mat4 = Mat4<real>;
 
 }  // namespace renderlib

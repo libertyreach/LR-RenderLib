@@ -31,7 +31,7 @@ public:
         }
 
         auto text = fps->getComponent<Text2D>();
-        text->color = vec4i{255, 255, 255, 255};
+        text->color = vec4i{{255, 255, 255, 255}};
         text->text = std::format("FPS {}", dt > 0 ? 1 / dt : 0);
         text->fontSize = 24;
 
@@ -45,7 +45,7 @@ int main()
 
     entt::entity cameraEntity = entt::null;
 
-    Runtime runtime(std::move(backend), {1280, 960}, "Hello Renderlib");
+    Runtime runtime(std::move(backend), vec2i{{1280, 960}}, "Hello Renderlib");
 
     auto test = runtime.addSystem<TestSystem>();
 
@@ -64,13 +64,13 @@ int main()
         {
             auto box2 = entities->add()->addComponent<Box>();
             box2->size = vec3{100, 100, 0};
-            box2->color = vec4i{0, 255, 0, 100};
+            box2->color = vec4i{{0, 255, 0, 100}};
             box2->entity->transform.position[2] = 1;
 
             test->cube = entities->add(box2->entity);
             auto box = test->cube->addComponent<Box>();
             box->size = vec3{100, 100, 0};
-            box->color = vec4i{255, 0, 0, 100};
+            box->color = vec4i{{255, 0, 0, 100}};
             box->entity->transform.position[2] = 2;
 
             test->fps = entities->add();

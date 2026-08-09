@@ -2,7 +2,6 @@
 
 #include "types.h"
 #include "component.h"
-#include "math.h"
 #include <entt/entt.hpp>
 
 namespace renderlib {
