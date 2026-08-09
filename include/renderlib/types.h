@@ -31,7 +31,11 @@ using optional = std::optional<T>;
 template <typename T>
 using interval = std::tuple<T, T>;
 
+#ifdef RL_HIGH_PRECISION
+using real = double;
+#else
 using real = float;
+#endif
 
 using vec4i = Vector<int, 4>;
 using vec3i = Vector<int, 3>;
