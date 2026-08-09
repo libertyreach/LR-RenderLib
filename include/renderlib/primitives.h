@@ -14,7 +14,15 @@ struct Box : public Component
 struct Sphere : public Component
 {
     vec4i color;
-    float radius;
+    real radius;
+};
+
+struct Circle : public Component
+{
+    vec4i color;
+    real radius;
+    bool filled;
+    real thickness;
 };
 
 struct Text2D : public Component
