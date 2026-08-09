@@ -2,12 +2,13 @@
 #include <iostream>
 #include <thread>
 
+#include <Raylib.h>
+
 #include <renderlib/runtime.h>
 #include <renderlib/graphicsBackends/raylib.h>
 #include <renderlib/primitives.h>
 #include <renderlib/camera.h>
 
-#include <Raylib.h>
 
 using namespace renderlib;
 
