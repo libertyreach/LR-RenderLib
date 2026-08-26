@@ -105,7 +105,7 @@ void demo3D(Runtime& runtime)
             auto box = entities->add()->addComponent<Box>();
             box->size = vec3{100, 200, 300};
             box->colors = PrimitiveColors{
-                ColorMode::FillAndColor, vec4i{{0, 255, 0, 50}},
+                ColorMode::FillAndBorder, vec4i{{0, 255, 0, 50}},
                 vec4i{{255, 0, 0, 255}}};
             box->entity->transform.position[2] = 1;
 
@@ -113,7 +113,7 @@ void demo3D(Runtime& runtime)
             box2->entity->transform.position = vec3{500, 500, 0};
             box2->size = vec3{100, 200, 300};
             box2->colors = PrimitiveColors{
-                ColorMode::FillAndColor, vec4i{{0, 0, 255, 50}},
+                ColorMode::FillAndBorder, vec4i{{0, 0, 255, 50}},
                 vec4i{{255, 0, 0, 255}}};
             box2->entity->transform.position[2] = 1;
 

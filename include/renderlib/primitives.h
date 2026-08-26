@@ -9,7 +9,7 @@ enum class ColorMode
 {
     FillOnly,
     BorderOnly,
-    FillAndColor,
+    FillAndBorder,
 };
 
 struct PrimitiveColors

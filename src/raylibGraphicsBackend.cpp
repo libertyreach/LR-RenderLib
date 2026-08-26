@@ -68,8 +68,8 @@ static void applyPerspectiveCameraControls(PerspectiveCamera& cam)
         if (targetDistance == 0)
         {
             // No view direction to work from: any axis off the up axis will do.
-            forward = std::abs(upAxis[0]) < (real)0.9 ? vec3{1, 0, 0}
-                                                     : vec3{0, 1, 0};
+            forward =
+                std::abs(upAxis[0]) < (real)0.9 ? vec3{1, 0, 0} : vec3{0, 1, 0};
             targetDistance = 1;
         }
         forward.normalize();
@@ -199,13 +199,13 @@ static void applyOrthographicControls(OrthographicCamera& cam)
 static bool hasFill(PrimitiveColors const& colors)
 {
     return colors.mode == ColorMode::FillOnly ||
-           colors.mode == ColorMode::FillAndColor;
+           colors.mode == ColorMode::FillAndBorder;
 }
 
 static bool hasBorder(PrimitiveColors const& colors)
 {
     return colors.mode == ColorMode::BorderOnly ||
-           colors.mode == ColorMode::FillAndColor;
+           colors.mode == ColorMode::FillAndBorder;
 }
 
 // Whether any part that will actually be drawn is translucent, and so has to
@@ -311,8 +311,7 @@ void RaylibGraphicsBackend::drawCircle(
     if (border)
     {
         Color borderColor = toColor(colors.borderColor);
-        rlColor4ub(
-            borderColor.r, borderColor.g, borderColor.b, borderColor.a);
+        rlColor4ub(borderColor.r, borderColor.g, borderColor.b, borderColor.a);
         for (int i = 0; i < segments; i++)
         {
             float a0 = i * step;
