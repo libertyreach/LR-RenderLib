@@ -5,23 +5,36 @@
 
 namespace renderlib {
 
+enum class ColorMode
+{
+    FillOnly,
+    BorderOnly,
+    FillAndColor,
+};
+
+struct PrimitiveColors
+{
+    ColorMode mode;
+    vec4i fillColor;
+    vec4i borderColor;
+};
+
 struct Box : public Component
 {
-    vec4i color;
+    PrimitiveColors colors;
     vec3 size;
 };
 
 struct Sphere : public Component
 {
-    vec4i color;
+    PrimitiveColors colors;
     real radius;
 };
 
 struct Circle : public Component
 {
-    vec4i color;
+    PrimitiveColors colors;
     real radius;
-    bool filled;
     real thickness;
 };
 
@@ -38,6 +51,12 @@ struct Text3D : public Component
     vec4i color;
     string text;
     int fontSize;
+};
+
+struct Grid3D : public Component
+{
+    int slices;
+    real cellSize;
 };
 
 }  // namespace renderlib

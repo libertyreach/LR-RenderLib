@@ -25,13 +25,120 @@ struct DrawCommand
     std::function<void()> command;
 };
 
-// Applies mouse-driven pan/zoom to an orthographic camera when its entity
-// carries the OrthographicPan / OrthographicZoom control components.
-//
-// Assumes the conventional orthographic setup: looking down -Z with +Y up and
-// no roll, so screen axes map directly to world X/Y and the screen centre shows
-// the camera's target. cam.width is the visible *height* in world units (raylib
-// uses an orthographic camera's fovy as the vertical extent).
+// Rotate `v` about the unit vector `axis` by `radians` (Rodrigues' formula).
+static vec3 rotateAbout(vec3 const& v, vec3 const& axis, real radians)
+{
+    real c = std::cos(radians);
+    real s = std::sin(radians);
+    return v * c + axis.cross(v) * s + axis * (axis.dot(v) * (1 - c));
+}
+
+// The axis orthogonal to forward used for strafing and as the pitch axis. Kept
+// orthogonal to the world up axis so neither looking nor strafing ever rolls
+// the camera.
+static vec3 rightOf(vec3 const& forward, vec3 const& upAxis)
+{
+    vec3 right = forward.cross(upAxis);
+    if (right.magnitudeSq() < (real)1e-12)
+    {
+        // Looking straight up or down the up axis: pick any axis orthogonal
+        // to forward so the basis stays well defined.
+        right = forward.cross(
+            std::abs(forward[0]) < (real)0.9 ? vec3{1, 0, 0} : vec3{0, 1, 0});
+    }
+    return right.normalized();
+}
+
+static void applyPerspectiveCameraControls(PerspectiveCamera& cam)
+{
+    if (auto* flyCam = cam.entity->getComponent<FlyCamera>())
+    {
+        Entity* entity = cam.entity;
+
+        // Camera basis. Forward is the view direction; right is orthogonal to
+        // both forward and the world up axis (cam.upAxis, Z in renderlib's
+        // convention), so strafing never rolls the camera.
+        vec3 upAxis = cam.upAxis.normalized();
+        if (upAxis.magnitudeSq() == 0) upAxis = vec3{0, 0, 1};
+
+        vec3 offset = cam.target - entity->transform.position;
+        real targetDistance = offset.magnitude();
+
+        vec3 forward = offset;
+        if (targetDistance == 0)
+        {
+            // No view direction to work from: any axis off the up axis will do.
+            forward = std::abs(upAxis[0]) < (real)0.9 ? vec3{1, 0, 0}
+                                                     : vec3{0, 1, 0};
+            targetDistance = 1;
+        }
+        forward.normalize();
+
+        vec3 right = rightOf(forward, upAxis);
+
+        // FPS-style mouse look while the middle mouse button is held: yaw about
+        // the world up axis, pitch about the camera's right axis.
+        if (IsMouseButtonDown(MOUSE_BUTTON_MIDDLE))
+        {
+            Vector2 mouse = GetMouseDelta();
+            real sensitivity = flyCam->lookSensitivity * (real)DEG2RAD;
+
+            if (mouse.x != 0.0f)
+            {
+                // Dragging right turns right, i.e. away from the right axis.
+                forward = rotateAbout(forward, upAxis, -mouse.x * sensitivity)
+                              .normalized();
+                right = rightOf(forward, upAxis);
+            }
+
+            if (mouse.y != 0.0f)
+            {
+                real dPitch = -mouse.y * sensitivity;
+                if (flyCam->invertLookY) dPitch = -dPitch;
+
+                // Clamp the resulting pitch so the view never tips over the
+                // pole (which would flip the horizon).
+                real limit = flyCam->maxPitch * (real)DEG2RAD;
+                real pitch =
+                    std::asin(clamp(forward.dot(upAxis), (real)-1, (real)1));
+                dPitch = clamp(pitch + dPitch, -limit, limit) - pitch;
+
+                forward = rotateAbout(forward, right, dPitch).normalized();
+            }
+
+            // Look rotates about the camera, so the target follows the view at
+            // its original distance.
+            cam.target = entity->transform.position + forward * targetDistance;
+        }
+
+        vec3 move;
+        if (IsKeyDown(KEY_W)) move += forward;
+        if (IsKeyDown(KEY_S)) move -= forward;
+        if (IsKeyDown(KEY_D)) move += right;
+        if (IsKeyDown(KEY_A)) move -= right;
+        // Vertical movement follows the world up axis, not the view, so E/Q
+        // always climb and descend regardless of pitch.
+        if (IsKeyDown(KEY_E)) move += upAxis;
+        if (IsKeyDown(KEY_Q)) move -= upAxis;
+
+        if (move.magnitudeSq() > 0)
+        {
+            real speed =
+                (IsKeyDown(KEY_LEFT_SHIFT) || IsKeyDown(KEY_RIGHT_SHIFT))
+                    ? flyCam->fastSpeed
+                    : flyCam->speed;
+
+            // Normalized so diagonal movement isn't faster than axial.
+            vec3 delta = move.normalized() * (speed * (real)GetFrameTime());
+
+            // Translate position and target together to keep the view
+            // direction unchanged while flying.
+            entity->transform.position += delta;
+            cam.target += delta;
+        }
+    }
+}
+
 static void applyOrthographicControls(OrthographicCamera& cam)
 {
     Entity* entity = cam.entity;
@@ -89,71 +196,123 @@ static void applyOrthographicControls(OrthographicCamera& cam)
     }
 }
 
-void RaylibGraphicsBackend::drawBox(vec3 size, vec4i color, mat4 const& xform)
+static bool hasFill(PrimitiveColors const& colors)
+{
+    return colors.mode == ColorMode::FillOnly ||
+           colors.mode == ColorMode::FillAndColor;
+}
+
+static bool hasBorder(PrimitiveColors const& colors)
+{
+    return colors.mode == ColorMode::BorderOnly ||
+           colors.mode == ColorMode::FillAndColor;
+}
+
+// Whether any part that will actually be drawn is translucent, and so has to
+// be sorted back-to-front with the other translucent primitives.
+static bool isTranslucent(PrimitiveColors const& colors)
+{
+    return (hasFill(colors) && colors.fillColor[3] < 255) ||
+           (hasBorder(colors) && colors.borderColor[3] < 255);
+}
+
+void RaylibGraphicsBackend::drawBox(
+    vec3 size, PrimitiveColors const& colors, mat4 const& xform)
 {
     rlPushMatrix();
     rlMultMatrixf(xform.m.data());
-    DrawCubeV(Vector3{0.0f, 0.0f, 0.0f}, toVector(size), toColor(color));
+
+    const Vector3 origin{0.0f, 0.0f, 0.0f};
+    if (hasFill(colors))
+    {
+        DrawCubeV(origin, toVector(size), toColor(colors.fillColor));
+    }
+    if (hasBorder(colors))
+    {
+        DrawCubeWiresV(origin, toVector(size), toColor(colors.borderColor));
+    }
+
     rlPopMatrix();
 }
 
 void RaylibGraphicsBackend::drawBox(Box const& box)
 {
-    drawBox(box.size, box.color, box.entity->worldMatrix);
+    drawBox(box.size, box.colors, box.entity->worldMatrix);
 }
 
 void RaylibGraphicsBackend::drawSphere(
-    real radius, vec4i const& color, mat4 const& xform)
+    real radius, PrimitiveColors const& colors, mat4 const& xform)
 {
     rlPushMatrix();
     rlMultMatrixf(xform.m.data());
-    DrawSphere(Vector3{0, 0, 0}, radius, toColor(color));
+
+    const Vector3 origin{0.0f, 0.0f, 0.0f};
+    const int rings = 16;
+    const int slices = 16;
+
+    if (hasFill(colors))
+    {
+        DrawSphere(origin, radius, toColor(colors.fillColor));
+    }
+    if (hasBorder(colors))
+    {
+        DrawSphereWires(
+            origin, radius, rings, slices, toColor(colors.borderColor));
+    }
+
     rlPopMatrix();
 }
 
 void RaylibGraphicsBackend::drawSphere(Sphere const& sphere)
 {
-    drawSphere(sphere.radius, sphere.color, sphere.entity->worldMatrix);
+    drawSphere(sphere.radius, sphere.colors, sphere.entity->worldMatrix);
 }
 
 void RaylibGraphicsBackend::drawCircle(
-    real radius, vec4i const& _color, real thickness, mat4 const& xform)
+    real radius, PrimitiveColors const& colors, real thickness,
+    mat4 const& xform)
 {
+    const bool fill = hasFill(colors);
+    const bool border = hasBorder(colors);
+    if (!fill && !border) return;
+
     rlPushMatrix();
     rlMultMatrixf(xform.m.data());
 
-    Color color = toColor(_color);
     const int segments = 64;
     const float step = 2.0f * PI / segments;
-}
 
-void RaylibGraphicsBackend::drawCircle(Circle const& circle)
-{
-    rlPushMatrix();
-    rlMultMatrixf(circle.entity->worldMatrix.m.data());
-
-    Color color = toColor(circle.color);
-    const int segments = 64;
-    const float step = 2.0f * PI / segments;
-    const float r = circle.radius;
+    // The border occupies the outer `thickness` of the radius; the fill stops
+    // where it begins so the two never overlap (coplanar geometry with the
+    // depth mask off would otherwise z-fight).
+    float inner = radius;
+    if (border)
+    {
+        inner = radius - (float)thickness;
+        if (inner < 0.0f) inner = 0.0f;
+    }
 
     rlBegin(RL_TRIANGLES);
-    rlColor4ub(color.r, color.g, color.b, color.a);
-    if (circle.filled)
+
+    if (fill)
     {
+        Color fillColor = toColor(colors.fillColor);
+        rlColor4ub(fillColor.r, fillColor.g, fillColor.b, fillColor.a);
         for (int i = 0; i < segments; i++)
         {
             float a0 = i * step;
             float a1 = (i + 1) * step;
             rlVertex3f(0.0f, 0.0f, 0.0f);
-            rlVertex3f(cosf(a0) * r, sinf(a0) * r, 0.0f);
-            rlVertex3f(cosf(a1) * r, sinf(a1) * r, 0.0f);
+            rlVertex3f(cosf(a0) * inner, sinf(a0) * inner, 0.0f);
+            rlVertex3f(cosf(a1) * inner, sinf(a1) * inner, 0.0f);
         }
     }
-    else
+
+    if (border)
     {
-        float inner = r - circle.thickness;
-        if (inner < 0.0f) inner = 0.0f;
+        Color borderColor = toColor(colors.borderColor);
+        rlColor4ub(
+            borderColor.r, borderColor.g, borderColor.b, borderColor.a);
         for (int i = 0; i < segments; i++)
         {
             float a0 = i * step;
@@ -164,17 +323,43 @@ void RaylibGraphicsBackend::drawCircle(Circle const& circle)
             // Two triangles forming the quad between inner and outer
             // radius for this segment.
             rlVertex3f(c0 * inner, s0 * inner, 0.0f);
-            rlVertex3f(c0 * r, s0 * r, 0.0f);
-            rlVertex3f(c1 * r, s1 * r, 0.0f);
+            rlVertex3f(c0 * radius, s0 * radius, 0.0f);
+            rlVertex3f(c1 * radius, s1 * radius, 0.0f);
 
             rlVertex3f(c0 * inner, s0 * inner, 0.0f);
-            rlVertex3f(c1 * r, s1 * r, 0.0f);
+            rlVertex3f(c1 * radius, s1 * radius, 0.0f);
             rlVertex3f(c1 * inner, s1 * inner, 0.0f);
         }
     }
+
     rlEnd();
 
     rlPopMatrix();
+}
+
+void RaylibGraphicsBackend::drawCircle(Circle const& circle)
+{
+    drawCircle(
+        circle.radius, circle.colors, circle.thickness,
+        circle.entity->worldMatrix);
+}
+
+void RaylibGraphicsBackend::drawGrid(
+    int slices, real cellSize, mat4 const& xform)
+{
+    rlPushMatrix();
+    rlMultMatrixf(xform.m.data());
+    // raylib draws the grid in its own XZ plane (it is Y-up); rotating it a
+    // quarter turn about X lands it on the XY plane, which is renderlib's flat
+    // ground plane. Rotate the entity itself to place it anywhere else.
+    rlMultMatrixf(mat4::rotateEuler(vec3{90, 0, 0}).m.data());
+    DrawGrid(slices, (float)cellSize);
+    rlPopMatrix();
+}
+
+void RaylibGraphicsBackend::drawGrid(Grid3D const& grid)
+{
+    drawGrid(grid.slices, grid.cellSize, grid.entity->worldMatrix);
 }
 
 void RaylibGraphicsBackend::render(Entities* entities)
@@ -198,14 +383,17 @@ void RaylibGraphicsBackend::render(Entities* entities)
     }
 
     {
-        entities->registry()->view<const PerspectiveCamera>().each(
-            [&](PerspectiveCamera const& perspective) {
+        entities->registry()->view<PerspectiveCamera>().each(
+            [&](PerspectiveCamera& perspective) {
                 if (foundCamera) std::cout << "Camera already set!\n";
+                applyPerspectiveCameraControls(perspective);
                 camera3D = true;
                 camera.position =
                     toVector(perspective.entity->transform.position);
                 camera.target = toVector(perspective.target);
-                camera.up = toVector(perspective.up);
+                // raylib is Y-up; feeding it the world up axis is what lets a
+                // Z-up scene render upright.
+                camera.up = toVector(perspective.upAxis);
                 camera.fovy = perspective.fov;
                 camera.projection = CAMERA_PERSPECTIVE;
                 foundCamera = true;
@@ -224,8 +412,12 @@ void RaylibGraphicsBackend::render(Entities* entities)
     {
         BeginMode3D(camera);
 
+        // Grids first: they are opaque and sit behind everything else.
+        entities->registry()->view<const Grid3D>().each(
+            [&](Grid3D const& grid) { drawGrid(grid); });
+
         entities->registry()->view<const Box>().each([&](Box const& box) {
-            if (box.color[3] < 255)
+            if (isTranslucent(box.colors))
             {
                 commands.emplace_back(box.entity, [&, box] { drawBox(box); });
             }
@@ -234,7 +426,7 @@ void RaylibGraphicsBackend::render(Entities* entities)
 
         entities->registry()->view<const Sphere>().each(
             [&](Sphere const& sphere) {
-                if (sphere.color[3] < 255)
+                if (isTranslucent(sphere.colors))
                 {
                     commands.emplace_back(
                         sphere.entity, [&, sphere] { drawSphere(sphere); });
@@ -244,7 +436,7 @@ void RaylibGraphicsBackend::render(Entities* entities)
 
         entities->registry()->view<const Circle>().each(
             [&](Circle const& circle) {
-                if (circle.color[3] < 255)
+                if (isTranslucent(circle.colors))
                 {
                     commands.emplace_back(
                         circle.entity, [&, circle] { drawCircle(circle); });

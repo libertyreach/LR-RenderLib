@@ -35,14 +35,17 @@ inline auto toVector(T vec)
 class RaylibGraphicsBackend : public itf::GraphicsBackend
 {
 public:
-    void drawBox(vec3 size, vec4i color, mat4 const& xform);
+    void drawBox(vec3 size, PrimitiveColors const& colors, mat4 const& xform);
     void drawBox(Box const& box);
-    void drawSphere(real radius, vec4i const& color, mat4 const& xform);
+    void drawSphere(
+        real radius, PrimitiveColors const& colors, mat4 const& xform);
     void drawSphere(Sphere const& sphere);
     void drawCircle(
-        real radius, vec4i const& color, real thickness, mat4 const& xform);
-    void drawCircleFilled(real radius, vec4i const& color, mat4 const& xform);
+        real radius, PrimitiveColors const& colors, real thickness,
+        mat4 const& xform);
     void drawCircle(Circle const& circle);
+    void drawGrid(int slices, real cellSize, mat4 const& xform);
+    void drawGrid(Grid3D const& grid);
 
     void open(vec2i size, string title) override;
     void close() override;

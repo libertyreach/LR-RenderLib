@@ -40,14 +40,8 @@ public:
     }
 };
 
-int main()
+void demo2D(Runtime& runtime)
 {
-    auto backend = std::make_unique<RaylibGraphicsBackend>();
-
-    entt::entity cameraEntity = entt::null;
-
-    Runtime runtime(std::move(backend), vec2i{{1280, 960}}, "Hello Renderlib");
-
     auto test = runtime.addSystem<TestSystem>();
 
     runtime.modify([&](Entities* entities) {
@@ -63,24 +57,93 @@ int main()
             camera->width = 300.0f;  // tall enough for a 100-unit cube
         }
         {
+            auto grid = entities->add()->addComponent<Grid3D>();
+            grid->cellSize = 100.0f;
+            grid->slices = 100;
+
             auto box2 = entities->add()->addComponent<Box>();
             box2->size = vec3{100, 100, 0};
-            box2->color = vec4i{{0, 255, 0, 100}};
+            box2->colors = PrimitiveColors{
+                ColorMode::FillOnly, vec4i{{0, 255, 0, 100}},
+                vec4i{{0, 0, 0, 0}}};
             box2->entity->transform.position[2] = 1;
 
             test->cube = entities->add(box2->entity);
             auto box = test->cube->addComponent<Box>();
             box->size = vec3{100, 100, 0};
-            box->color = vec4i{{255, 0, 0, 100}};
+            box->colors = PrimitiveColors{
+                ColorMode::FillOnly, vec4i{{255, 0, 0, 100}},
+                vec4i{{0, 0, 0, 0}}};
             box->entity->transform.position[2] = 2;
 
             test->fps = entities->add();
             test->fps->addComponent<Text2D>();
         }
     });
+}
 
-    // Movement now happens on the render thread (see customRenderer above),
-    // so the main thread just waits for the window to close.
+void demo3D(Runtime& runtime)
+{
+    runtime.modify([&](Entities* entities) {
+        {
+            auto cameraEntity = entities->add("Camera");
+            auto camera = cameraEntity->addComponent<PerspectiveCamera>();
+            // Z-up world: X/Y is the ground plane, so the camera sits off to
+            // the side and above, looking down at the scene.
+            cameraEntity->transform.position = {800, -800, 600};
+            camera->target = {250, 250, 0};
+            camera->upAxis = {0, 0, 1};
+            camera->fov = 60;
+
+            cameraEntity->addComponent<FlyCamera>();
+        }
+        {
+            auto grid = entities->add()->addComponent<Grid3D>();
+            grid->cellSize = 100.0f;
+            grid->slices = 20;  // 2000 x 2000 units, centred on the origin
+
+            auto box = entities->add()->addComponent<Box>();
+            box->size = vec3{100, 200, 300};
+            box->colors = PrimitiveColors{
+                ColorMode::FillAndColor, vec4i{{0, 255, 0, 50}},
+                vec4i{{255, 0, 0, 255}}};
+            box->entity->transform.position[2] = 1;
+
+            auto box2 = entities->add()->addComponent<Box>();
+            box2->entity->transform.position = vec3{500, 500, 0};
+            box2->size = vec3{100, 200, 300};
+            box2->colors = PrimitiveColors{
+                ColorMode::FillAndColor, vec4i{{0, 0, 255, 50}},
+                vec4i{{255, 0, 0, 255}}};
+            box2->entity->transform.position[2] = 1;
+
+            auto label = entities->add()->addComponent<Text3D>();
+            label->color = vec4i{{255, 0, 0, 255}};
+            label->fontSize = 24;
+            label->text = "Hello RenderLib User";
+            label->entity->transform.position[1] = 150;
+        }
+    });
+}
+
+int main(int argc, char** argv)
+{
+    if (argc != 2) { throw std::runtime_error("Expected demo name"); }
+
+    const auto demo = std::string(argv[1]);
+
+    if (demo != "2D" && demo != "3D")
+    {
+        throw std::runtime_error("Expected demo of '3D' or '2D'");
+    }
+
+    auto backend = std::make_unique<RaylibGraphicsBackend>();
+
+    Runtime runtime(std::move(backend), vec2i{{1280, 960}}, "Hello Renderlib");
+
+    if (demo == "2D") { demo2D(runtime); }
+    else { demo3D(runtime); }
+
     while (runtime.running())
     {
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
