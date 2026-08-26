@@ -89,20 +89,42 @@ static void applyOrthographicControls(OrthographicCamera& cam)
     }
 }
 
-void RaylibGraphicsBackend::drawBox(Box const& box)
+void RaylibGraphicsBackend::drawBox(vec3 size, vec4i color, mat4 const& xform)
 {
     rlPushMatrix();
-    rlMultMatrixf(box.entity->worldMatrix.m.data());
-    DrawCubeV(
-        Vector3{0.0f, 0.0f, 0.0f}, toVector(box.size), toColor(box.color));
+    rlMultMatrixf(xform.m.data());
+    DrawCubeV(Vector3{0.0f, 0.0f, 0.0f}, toVector(size), toColor(color));
+    rlPopMatrix();
+}
+
+void RaylibGraphicsBackend::drawBox(Box const& box)
+{
+    drawBox(box.size, box.color, box.entity->worldMatrix);
+}
+
+void RaylibGraphicsBackend::drawSphere(
+    real radius, vec4i const& color, mat4 const& xform)
+{
+    rlPushMatrix();
+    rlMultMatrixf(xform.m.data());
+    DrawSphere(Vector3{0, 0, 0}, radius, toColor(color));
     rlPopMatrix();
 }
 
 void RaylibGraphicsBackend::drawSphere(Sphere const& sphere)
 {
-    DrawSphere(
-        toVector(sphere.entity->worldPosition()), sphere.radius,
-        toColor(sphere.color));
+    drawSphere(sphere.radius, sphere.color, sphere.entity->worldMatrix);
+}
+
+void RaylibGraphicsBackend::drawCircle(
+    real radius, vec4i const& _color, real thickness, mat4 const& xform)
+{
+    rlPushMatrix();
+    rlMultMatrixf(xform.m.data());
+
+    Color color = toColor(_color);
+    const int segments = 64;
+    const float step = 2.0f * PI / segments;
 }
 
 void RaylibGraphicsBackend::drawCircle(Circle const& circle)
